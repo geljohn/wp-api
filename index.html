@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Minimal App Password Authorization Link</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; margin: 2em; }
+        label { display: block; margin-bottom: 1em; }
+        input[type="text"], input[type="url"] { width: 300px; }
+        button { margin-top: 1em; }
+        .result { margin-top: 2em; }
+        code { background: #f4f4f4; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+    <h2>Generate App Password Authorization Link</h2>
+    <form id="auth-link-form">
+        <label>
+            WordPress Site URL:
+            <input type="url" name="site_url" id="site_url" required placeholder="https://example.com">
+        </label>
+        <label>
+            App Name:
+            <input type="text" name="app_name" id="app_name" required>
+        </label>
+        <button type="submit">Generate Link</button>
+    </form>
+
+    <div class="result" id="result"></div>
+
+    <script>
+        // UUID v4 generator (JS version of wp_generate_uuid4)
+        function wp_generate_uuid4() {
+            return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+            );
+        }
+
+        // UUID v4 validator (JS version of wp_is_uuid)
+        function wp_is_uuid(uuid, version = null) {
+            if (typeof uuid !== 'string') return false;
+            let regex;
+            if (version === 4) {
+                regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            } else {
+                regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            }
+            return regex.test(uuid);
+        }
+
+        document.getElementById('auth-link-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const siteUrl = document.getElementById('site_url').value.trim().replace(/\/+$/, '');
+            const appName = document.getElementById('app_name').value.trim();
+
+            if (!siteUrl || !appName) {
+                document.getElementById('result').innerHTML = '<span style="color:red;">Both fields are required.</span>';
+                return;
+            }
+
+            // Generate a valid UUID v4 for app_id
+            let appId;
+            do {
+                appId = wp_generate_uuid4();
+            } while (!wp_is_uuid(appId, 4));
+
+            // Automatically cook up the success_url as current page + "?site_url=THE_SITE_URL"
+            const cookedSuccessUrl = window.location.origin + window.location.pathname + '?site_url=' + encodeURIComponent(siteUrl);
+
+            const params = new URLSearchParams({
+                app_name: appName,
+                app_id: appId,
+                success_url: cookedSuccessUrl
+            });
+
+            const authUrl = `${siteUrl}/wp-admin/authorize-application.php?${params.toString()}`;
+
+            document.getElementById('result').innerHTML = `
+                <p>
+                    <a href="${authUrl}" target="_blank" rel="noopener">
+                        Click here to authorize <strong>${appName}</strong>
+                    </a>
+                </p>
+                <p>
+                    <small>URL: <code>${authUrl}</code></small>
+                </p>
+                <p>
+                    <small>
+                        After approval, you will be redirected to:<br>
+                        <code>${cookedSuccessUrl}&user_login=USERNAME&password=PASSWORD</code>
+                    </small>
+                </p>
+            `;
+        });
+    </script>
+</body>
+</html>
